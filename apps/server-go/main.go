@@ -9,6 +9,7 @@ import (
 
 	"dragonsnshit/packages/common"
 	"dragonsnshit/server/player"
+	"dragonsnshit/server/store"
 	"dragonsnshit/server/system"
 )
 
@@ -53,6 +54,7 @@ func main() {
 	fmt.Println("Go backend listening on :6969")
 	buf := make([]byte, 2048)
 	p := &shankPlayer{pos: system.Vec3{}, eyeHeight: 1.62, world: world{}}
+	clientStore := store.NewMemoryClientStore()
 
 	for {
 		conn.SetReadDeadline(time.Now().Add(250 * time.Millisecond))
@@ -79,6 +81,7 @@ func main() {
 				continue
 			}
 			cmd := parseUserCmd(buf, netHeaderSize+1)
+			clientStore.Upsert(remote.String(), cmd)
 			if cmd.Buttons&common.BtnAttack != 0 {
 				player.HandleShankFire(p, float64(cmd.Yaw), float64(cmd.Pitch), int(cmd.WeaponIdx))
 			}
