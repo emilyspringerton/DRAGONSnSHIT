@@ -1,4 +1,4 @@
-name: Go Build & Test (DragonsNShit Kernel)
+name: Go Build, Test & Construct (DragonsNShit)
 
 on:
   push:
@@ -27,11 +27,11 @@ jobs:
           go test ./...
 
   # -----------------------------
-  # BUILD BINARIES
+  # BUILD + CONSTRUCT
   # -----------------------------
 
   build-artifacts:
-    name: 🏗️ Build Cross-Platform Binaries
+    name: 🏗️ Build Binaries & Generate Construct
     runs-on: ubuntu-latest
     needs: go-test
 
@@ -42,10 +42,12 @@ jobs:
         with:
           go-version: "1.21"
 
-      - name: Prepare artifact directory
-        run: mkdir -p artifacts
+      - name: Prepare directories
+        run: |
+          mkdir -p artifacts
+          mkdir -p construct
 
-      # ---- SERVER BUILDS ----
+      # ---- BUILD SERVER ----
 
       - name: Build Server (Linux amd64)
         run: GOOS=linux GOARCH=amd64 go build -o artifacts/server-linux-amd64 ./apps/server-go
@@ -60,7 +62,7 @@ jobs:
         run: GOOS=windows GOARCH=arm64 go build -o artifacts/server-windows-arm64.exe ./apps/server-go
 
 
-      # ---- CLIENT BUILDS ----
+      # ---- BUILD CLIENT ----
 
       - name: Build Client (Linux amd64)
         run: GOOS=linux GOARCH=amd64 go build -o artifacts/client-linux-amd64 ./apps/client-go
@@ -75,10 +77,43 @@ jobs:
         run: GOOS=windows GOARCH=arm64 go build -o artifacts/client-windows-arm64.exe ./apps/client-go
 
 
-      # ---- UPLOAD ----
+      # -----------------------------
+      # GENERATE CONSTRUCT MANIFEST
+      # -----------------------------
 
-      - name: Upload artifacts
+      - name: Generate CONSTRUCT
+        run: |
+          echo "DRAGONSNHIT BUILD ${{ github.run_number }} CONSTRUCT" > construct/DRAGONSNHIT_CONSTRUCT.txt
+          echo "" >> construct/DRAGONSNHIT_CONSTRUCT.txt
+
+          FILES=$(find . \
+            -type f \
+            \( -name "*.go" -o -name "go.mod" \) \
+            ! -path "./artifacts/*" \
+            ! -path "./vendor/*" \
+            ! -path "./.git/*")
+
+          for file in $FILES; do
+            echo "--- FILE START: $file ---" >> construct/DRAGONSNHIT_CONSTRUCT.txt
+            cat "$file" >> construct/DRAGONSNHIT_CONSTRUCT.txt
+            echo "" >> construct/DRAGONSNHIT_CONSTRUCT.txt
+            echo "--- FILE END: $file ---" >> construct/DRAGONSNHIT_CONSTRUCT.txt
+            echo "" >> construct/DRAGONSNHIT_CONSTRUCT.txt
+          done
+
+
+      # -----------------------------
+      # UPLOAD EVERYTHING
+      # -----------------------------
+
+      - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
           name: dragonsnshit-binaries
           path: artifacts
+
+      - name: Upload construct
+        uses: actions/upload-artifact@v4
+        with:
+          name: dragonsnshit-construct
+          path: construct/DRAGONSNHIT_CONSTRUCT.txt
