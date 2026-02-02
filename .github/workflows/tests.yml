@@ -1,4 +1,4 @@
-name: Go Tests
+name: Go Build & Test (DragonsNShit Kernel)
 
 on:
   push:
@@ -6,34 +6,79 @@ on:
   pull_request:
 
 jobs:
+
+  # -----------------------------
+  # TESTS
+  # -----------------------------
+
   go-test:
+    name: 🧪 Run Go Tests
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-go@v5
         with:
           go-version: "1.21"
+
       - name: Run tests
-        run: go test ./...
+        run: |
+          go test ./...
+
+  # -----------------------------
+  # BUILD BINARIES
+  # -----------------------------
 
   build-artifacts:
+    name: 🏗️ Build Cross-Platform Binaries
     runs-on: ubuntu-latest
+    needs: go-test
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-go@v5
         with:
           go-version: "1.21"
-      - name: Build server binaries
-        run: |
-          mkdir -p artifacts
-          GOOS=linux GOARCH=amd64 go build -o artifacts/server-go-linux-amd64 ./apps/server-go
-          GOOS=windows GOARCH=amd64 go build -o artifacts/server-go-windows-amd64.exe ./apps/server-go
-      - name: Build client binaries
-        run: |
-          GOOS=linux GOARCH=amd64 go build -o artifacts/client-go-linux-amd64 ./apps/client-go
-          GOOS=windows GOARCH=amd64 go build -o artifacts/client-go-windows-amd64.exe ./apps/client-go
+
+      - name: Prepare artifact directory
+        run: mkdir -p artifacts
+
+      # ---- SERVER BUILDS ----
+
+      - name: Build Server (Linux amd64)
+        run: GOOS=linux GOARCH=amd64 go build -o artifacts/server-linux-amd64 ./apps/server-go
+
+      - name: Build Server (Linux arm64)
+        run: GOOS=linux GOARCH=arm64 go build -o artifacts/server-linux-arm64 ./apps/server-go
+
+      - name: Build Server (Windows amd64)
+        run: GOOS=windows GOARCH=amd64 go build -o artifacts/server-windows-amd64.exe ./apps/server-go
+
+      - name: Build Server (Windows arm64)
+        run: GOOS=windows GOARCH=arm64 go build -o artifacts/server-windows-arm64.exe ./apps/server-go
+
+
+      # ---- CLIENT BUILDS ----
+
+      - name: Build Client (Linux amd64)
+        run: GOOS=linux GOARCH=amd64 go build -o artifacts/client-linux-amd64 ./apps/client-go
+
+      - name: Build Client (Linux arm64)
+        run: GOOS=linux GOARCH=arm64 go build -o artifacts/client-linux-arm64 ./apps/client-go
+
+      - name: Build Client (Windows amd64)
+        run: GOOS=windows GOARCH=amd64 go build -o artifacts/client-windows-amd64.exe ./apps/client-go
+
+      - name: Build Client (Windows arm64)
+        run: GOOS=windows GOARCH=arm64 go build -o artifacts/client-windows-arm64.exe ./apps/client-go
+
+
+      # ---- UPLOAD ----
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: local-testing-binaries
+          name: dragonsnshit-binaries
           path: artifacts
