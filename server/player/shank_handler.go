@@ -38,7 +38,7 @@ type ShankPlayer interface {
 	SendSound(name string, pos system.Vec3)
 }
 
-func HandleShankFire(p ShankPlayer, yaw, pitch float64, weaponID int) {
+func HandleShankFire(p ShankPlayer, yaw, pitch float64, weaponID int) (bool, system.Vec3, bool) {
 	dir := system.DirectionFromYawPitch(yaw, pitch)
 
 	dist := system.DefaultRange
@@ -51,7 +51,7 @@ func HandleShankFire(p ShankPlayer, yaw, pitch float64, weaponID int) {
 
 	res, found := p.World().RayTrace(start, end)
 	if !found {
-		return
+		return false, system.Vec3{}, false
 	}
 
 	pos := res.Position()
@@ -59,8 +59,9 @@ func HandleShankFire(p ShankPlayer, yaw, pitch float64, weaponID int) {
 		e := entityResult.Entity()
 		e.Hurt(50.0, DamageSource{Cause: CauseProjectile})
 		p.SendSound("random.orb", pos)
-		return
+		return true, pos, true
 	}
 
 	p.SendSound("step.wood", pos)
+	return true, pos, false
 }

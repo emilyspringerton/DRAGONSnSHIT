@@ -22,6 +22,7 @@
 #include <GL/glu.h>
 
 #include "player_model.h"
+#include "render_voxel.h"
 
 #include "../../../packages/common/protocol.h"
 #include "../../../packages/common/physics.h"
@@ -48,6 +49,16 @@ float current_fov = 75.0f;
 
 int sock = -1;
 struct sockaddr_in server_addr;
+
+typedef struct {
+    NetVoxelPacket header;
+    VoxelBlock blocks[512];
+} VoxelPacketBuffer;
+
+static VoxelPacketBuffer voxel_packet;
+static int voxel_packet_valid = 0;
+static float last_impact_pos[3];
+static int last_impact_type = -1;
 
 void draw_char(char c, float x, float y, float s) {
     glLineWidth(2.0f); glBegin(GL_LINES); // Thicker text for Cyberpunk feel
@@ -483,6 +494,9 @@ void draw_scene(PlayerState *render_p) {
 
     draw_grid();
     update_and_draw_trails();
+    if (voxel_packet_valid) {
+        render_received_voxels(&voxel_packet.header);
+    }
     draw_map();
     if (render_p->in_vehicle) draw_player_3rd(render_p);
     for(int i=1; i<MAX_CLIENTS; i++) if(local_state.players[i].active && i != my_client_id) draw_player_3rd(&local_state.players[i]);
@@ -584,6 +598,38 @@ void net_process_snapshot(char *buffer, int len) {
     }
 }
 
+void net_process_voxel(char *buffer, int len) {
+    if (len < (int)sizeof(NetVoxelPacket)) return;
+    NetVoxelPacket *packet = (NetVoxelPacket*)buffer;
+    int available = (len - (int)sizeof(NetVoxelPacket)) / (int)sizeof(VoxelBlock);
+    int count = packet->block_count;
+    if (count < 0) return;
+    if (count > available) count = available;
+    if (count > (int)(sizeof(voxel_packet.blocks)/sizeof(voxel_packet.blocks[0]))) {
+        count = (int)(sizeof(voxel_packet.blocks)/sizeof(voxel_packet.blocks[0]));
+    }
+    voxel_packet.header = *packet;
+    voxel_packet.header.block_count = count;
+    if (count > 0) {
+        memcpy(voxel_packet.blocks, packet->blocks, sizeof(VoxelBlock) * count);
+    }
+    voxel_packet_valid = 1;
+}
+
+void net_process_impact(char *buffer, int len) {
+    if (len < (int)sizeof(NetImpactPacket)) return;
+    NetImpactPacket *impact = (NetImpactPacket*)buffer;
+    last_impact_pos[0] = impact->x;
+    last_impact_pos[1] = impact->y;
+    last_impact_pos[2] = impact->z;
+    last_impact_type = impact->impact_type;
+    if (impact->impact_type == 1) {
+        local_state.players[0].hit_feedback = 12;
+    } else {
+        local_state.players[0].hit_feedback = 6;
+    }
+}
+
 void net_tick() {
     char buffer[4096];
     struct sockaddr_in sender;
@@ -597,6 +643,12 @@ void net_tick() {
         if (head->type == PACKET_WELCOME) {
             my_client_id = head->client_id;
             printf("✅ JOINED SERVER AS CLIENT ID: %d\n", my_client_id);
+        }
+        if (head->type == PACKET_VOXEL_DATA) {
+            net_process_voxel(buffer, len);
+        }
+        if (head->type == PACKET_IMPACT) {
+            net_process_impact(buffer, len);
         }
         len = recvfrom(sock, buffer, 4096, 0, (struct sockaddr*)&sender, &slen);
     }

@@ -13,6 +13,7 @@ const (
 	PacketSnapshot  = 2
 	PacketWelcome   = 3
 	PacketVoxelData = 4
+	PacketImpact    = 5
 )
 
 const (

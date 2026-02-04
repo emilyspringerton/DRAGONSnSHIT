@@ -17,6 +17,7 @@
 #define PACKET_SNAPSHOT 2
 #define PACKET_WELCOME 3
 #define PACKET_VOXEL_DATA 4
+#define PACKET_IMPACT 5
 
 #define STATE_ALIVE 0
 #define STATE_DEAD 1
@@ -203,5 +204,14 @@ typedef struct {
     unsigned short block_count;
     VoxelBlock blocks[];
 } NetVoxelPacket;
+
+typedef struct {
+    unsigned char type;
+    unsigned char impact_type; // 0 = block, 1 = entity
+    float x;
+    float y;
+    float z;
+    unsigned short block_id;
+} NetImpactPacket;
 
 #endif
