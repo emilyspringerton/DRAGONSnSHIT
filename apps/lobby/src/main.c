@@ -21,6 +21,7 @@
 #include <SDL2/SDL_opengl.h>
 #include <GL/glu.h>
 
+#include "player_model.h"
 #include "render_voxel.h"
 
 #include "../../../packages/common/protocol.h"
