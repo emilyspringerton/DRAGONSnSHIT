@@ -15,6 +15,9 @@ const (
 	NUM_GOBLINS = 48
 	NUM_FOXES   = 32
 	DECAY       = 0.96
+
+	DragonIntervalTicks = 2000
+	DragonDurationTicks = 150
 )
 
 type Vec2 struct {
@@ -91,6 +94,12 @@ var market [H][W]float64
 var lane [H][W]float64
 var security [H][W]float64
 var spotlight [H][W]float64
+var dragonHeat [H][W]float64
+
+var dragonActive bool
+var dragonTick int
+var dragonX int
+var dragonY int
 
 func clear() {
 	fmt.Print("\x1b[2J\x1b[H")
@@ -246,6 +255,7 @@ func updateFields() {
 			lane[y][x] *= 0.97
 			security[y][x] *= 0.975
 			spotlight[y][x] *= 0.92
+			dragonHeat[y][x] *= 0.9
 
 			if power[y][x] > 0.1 {
 				for dy := -1; dy <= 1; dy++ {
@@ -274,6 +284,7 @@ func updateFields() {
 			lane[y][x] = clamp(lane[y][x], 0, 2)
 			security[y][x] = clamp(security[y][x], 0, 2)
 			spotlight[y][x] = clamp(spotlight[y][x], 0, 2)
+			dragonHeat[y][x] = clamp(dragonHeat[y][x], 0, 2)
 		}
 	}
 }
@@ -462,6 +473,32 @@ func updateFoxes() {
 	}
 }
 
+func updateDragon() {
+	dragonTick++
+	if !dragonActive && dragonTick%DragonIntervalTicks == 0 {
+		dragonActive = true
+		dragonX = rand.Intn(W)
+		dragonY = rand.Intn(H)
+	}
+
+	if dragonActive {
+		for dy := -2; dy <= 2; dy++ {
+			for dx := -2; dx <= 2; dx++ {
+				nx := (dragonX + dx + W) % W
+				ny := (dragonY + dy + H) % H
+				dragonHeat[ny][nx] += 0.2
+				entropy[ny][nx] += 0.1
+				security[ny][nx] *= 0.9
+				lane[ny][nx] *= 0.9
+				spotlight[ny][nx] += 0.15
+			}
+		}
+		if dragonTick%DragonDurationTicks == 0 {
+			dragonActive = false
+		}
+	}
+}
+
 func symbol(x, y int) string {
 	p := pheromone[y][x]
 	pw := power[y][x]
@@ -472,8 +509,11 @@ func symbol(x, y int) string {
 	ln := lane[y][x]
 	sec := security[y][x]
 	sp := spotlight[y][x]
+	dh := dragonHeat[y][x]
 
 	switch {
+	case dh > 0.8:
+		return "🐉"
 	case c > 0.85:
 		return "■"
 	case c > 0.6:
@@ -555,6 +595,7 @@ func main() {
 		updateBoids()
 		updateGoblins()
 		updateFoxes()
+		updateDragon()
 		updateFields()
 
 		render()
