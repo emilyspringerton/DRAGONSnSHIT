@@ -36,7 +36,7 @@ func TestStepVehicleBrakes(t *testing.T) {
 
 func TestStepVehicleSteers(t *testing.T) {
 	state := VehicleState{Velocity: Vec3{X: 40}}
-	cfg := VehicleConfig{Mass: 820, MaxEngineForce: 0, MaxBrakeForce: 0, DragCoefficient: 0.2, RollingResistance: 6, Wheelbase: 3.0}
+	cfg := VehicleConfig{Mass: 820, MaxEngineForce: 0, MaxBrakeForce: 0, DragCoefficient: 0.2, RollingResistance: 6, Wheelbase: 3.0, Steering: SteeringModel{LowSpeedLimit: 1, HighSpeedLimit: 1, TransitionSpeed: 1}}
 	tire := TireGripCurve{PeakSlip: 0.11, PeakGrip: 1.5, SlideGrip: 1.0}
 	aero := AeroModel{BaseDownforce: 900, DownforcePerMS2: 3.2}
 	brakes := BrakeModel{MaxBrakeForce: cfg.MaxBrakeForce, ABSResponse: 1.2}
@@ -57,5 +57,19 @@ func TestStepVehicleConservesMomentumWithoutForces(t *testing.T) {
 	updated, _ := StepVehicle(state, VehicleInput{}, cfg, tire, aero, brakes, 0.1)
 	if updated.Velocity != state.Velocity {
 		t.Fatalf("expected velocity to remain constant without forces")
+	}
+}
+
+func TestSteeringModelAppliesSpeedLimit(t *testing.T) {
+	model := SteeringModel{LowSpeedLimit: 1, HighSpeedLimit: 0.4, TransitionSpeed: 50}
+
+	lowSpeed := model.Apply(1, 5)
+	highSpeed := model.Apply(1, 100)
+
+	if lowSpeed <= highSpeed {
+		t.Fatalf("expected low-speed steering to be less restricted than high-speed steering")
+	}
+	if highSpeed != 0.4 {
+		t.Fatalf("expected high-speed steering to be clamped to 0.4, got %.2f", highSpeed)
 	}
 }

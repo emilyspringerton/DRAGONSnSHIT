@@ -21,6 +21,35 @@ type VehicleConfig struct {
 	DragCoefficient   float64
 	RollingResistance float64
 	Wheelbase         float64
+	Steering          SteeringModel
+}
+
+type SteeringModel struct {
+	LowSpeedLimit   float64
+	HighSpeedLimit  float64
+	TransitionSpeed float64
+}
+
+func (s SteeringModel) Apply(input, speed float64) float64 {
+	if s.TransitionSpeed <= 0 || (s.LowSpeedLimit == 0 && s.HighSpeedLimit == 0) {
+		return input
+	}
+
+	t := math.Min(speed/s.TransitionSpeed, 1)
+	limit := s.LowSpeedLimit + (s.HighSpeedLimit-s.LowSpeedLimit)*t
+	if limit < 0 {
+		limit = 0
+	}
+	if limit > 1 {
+		limit = 1
+	}
+	if input > limit {
+		return limit
+	}
+	if input < -limit {
+		return -limit
+	}
+	return input
 }
 
 type VehicleTelemetry struct {
@@ -85,7 +114,8 @@ func StepVehicle(state VehicleState, input VehicleInput, cfg VehicleConfig, tire
 	state.Position = state.Position.Add(state.Velocity.Mul(dt))
 
 	if cfg.Wheelbase > 0 {
-		yawRate := (speed / cfg.Wheelbase) * input.Steer
+		steer := cfg.Steering.Apply(input.Steer, speed)
+		yawRate := (speed / cfg.Wheelbase) * steer
 		state.Yaw += yawRate * dt
 	}
 
