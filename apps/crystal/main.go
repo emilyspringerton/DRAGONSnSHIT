@@ -13,6 +13,7 @@ const (
 
 	NUM_BOIDS   = 140
 	NUM_GOBLINS = 48
+	NUM_FOXES   = 32
 	DECAY       = 0.96
 )
 
@@ -61,8 +62,25 @@ type Goblin struct {
 	Greed  float64
 }
 
+type FoxType uint8
+
+const (
+	FoxCourier FoxType = iota
+	FoxPitFix
+	FoxApex
+	FoxShow
+)
+
+type Fox struct {
+	X, Y   int
+	VX, VY int
+	Kind   FoxType
+	Energy float64
+}
+
 var boids []Boid
 var goblins []Goblin
+var foxes []Fox
 
 var pheromone [H][W]float64
 var power [H][W]float64
@@ -70,6 +88,9 @@ var city [H][W]float64
 var entropy [H][W]float64
 var rubble [H][W]float64
 var market [H][W]float64
+var lane [H][W]float64
+var security [H][W]float64
+var spotlight [H][W]float64
 
 func clear() {
 	fmt.Print("\x1b[2J\x1b[H")
@@ -105,6 +126,8 @@ func initWorld() {
 			city[y][x] = rand.Float64() * 0.3
 			entropy[y][x] = rand.Float64() * 0.1
 			rubble[y][x] = rand.Float64() * 0.05
+			lane[y][x] = rand.Float64() * 0.05
+			security[y][x] = rand.Float64() * 0.05
 		}
 	}
 
@@ -116,6 +139,17 @@ func initWorld() {
 			Energy: 0.5 + rand.Float64(),
 			Aggro:  rand.Float64(),
 			Greed:  rand.Float64(),
+		})
+	}
+
+	for i := 0; i < NUM_FOXES; i++ {
+		foxes = append(foxes, Fox{
+			X:      rand.Intn(W),
+			Y:      rand.Intn(H),
+			VX:     rand.Intn(3) - 1,
+			VY:     rand.Intn(3) - 1,
+			Kind:   FoxType(rand.Intn(4)),
+			Energy: 0.5 + rand.Float64(),
 		})
 	}
 }
@@ -209,6 +243,9 @@ func updateFields() {
 			entropy[y][x] *= 0.98
 			rubble[y][x] *= 0.985
 			market[y][x] *= 0.96
+			lane[y][x] *= 0.97
+			security[y][x] *= 0.975
+			spotlight[y][x] *= 0.92
 
 			if power[y][x] > 0.1 {
 				for dy := -1; dy <= 1; dy++ {
@@ -234,6 +271,9 @@ func updateFields() {
 			entropy[y][x] = clamp(entropy[y][x], 0, 2)
 			rubble[y][x] = clamp(rubble[y][x], 0, 2)
 			market[y][x] = clamp(market[y][x], 0, 2)
+			lane[y][x] = clamp(lane[y][x], 0, 2)
+			security[y][x] = clamp(security[y][x], 0, 2)
+			spotlight[y][x] = clamp(spotlight[y][x], 0, 2)
 		}
 	}
 }
@@ -334,6 +374,94 @@ func updateGoblins() {
 	}
 }
 
+func foxSymbol(kind FoxType) string {
+	switch kind {
+	case FoxCourier:
+		return "f"
+	case FoxPitFix:
+		return "🔧"
+	case FoxApex:
+		return "🏁"
+	case FoxShow:
+		return "😈"
+	default:
+		return "f"
+	}
+}
+
+func foxScore(kind FoxType, x, y int) float64 {
+	trade := pheromone[y][x]
+	ln := lane[y][x]
+	ent := entropy[y][x]
+	sec := security[y][x]
+	sp := spotlight[y][x]
+	pw := power[y][x]
+
+	switch kind {
+	case FoxCourier:
+		return trade*1.2 + ln*1.8 - ent*0.6
+	case FoxPitFix:
+		return (1-pw)*1.4 + ent*0.4
+	case FoxApex:
+		return sec*1.2 + ln*0.8 - ent*0.4
+	case FoxShow:
+		return sp*2 + trade*0.4
+	default:
+		return ln + trade
+	}
+}
+
+func updateFoxes() {
+	for i := range foxes {
+		f := &foxes[i]
+		bestX, bestY := f.X, f.Y
+		bestScore := foxScore(f.Kind, f.X, f.Y)
+		for dy := -1; dy <= 1; dy++ {
+			for dx := -1; dx <= 1; dx++ {
+				nx := (f.X + dx + W) % W
+				ny := (f.Y + dy + H) % H
+				score := foxScore(f.Kind, nx, ny) + rand.Float64()*0.05
+				if score > bestScore {
+					bestScore = score
+					bestX, bestY = nx, ny
+				}
+			}
+		}
+		f.VX = bestX - f.X
+		f.VY = bestY - f.Y
+		f.X, f.Y = bestX, bestY
+		f.Energy -= 0.001
+
+		switch f.Kind {
+		case FoxCourier:
+			lane[f.Y][f.X] += 0.12
+			if rubble[f.Y][f.X] > 0.02 {
+				rubble[f.Y][f.X] *= 0.85
+			}
+			pheromone[f.Y][f.X] += 0.04
+		case FoxPitFix:
+			if entropy[f.Y][f.X] > 0.02 {
+				entropy[f.Y][f.X] *= 0.85
+			}
+			if power[f.Y][f.X] < 1 {
+				power[f.Y][f.X] += 0.15
+			}
+		case FoxApex:
+			security[f.Y][f.X] += 0.12
+			lane[f.Y][f.X] += 0.05
+		case FoxShow:
+			spotlight[f.Y][f.X] += 0.2
+			pheromone[f.Y][f.X] += 0.05
+		}
+
+		if f.Energy <= 0 {
+			f.X = rand.Intn(W)
+			f.Y = rand.Intn(H)
+			f.Energy = 0.5 + rand.Float64()
+		}
+	}
+}
+
 func symbol(x, y int) string {
 	p := pheromone[y][x]
 	pw := power[y][x]
@@ -341,6 +469,9 @@ func symbol(x, y int) string {
 	e := entropy[y][x]
 	r := rubble[y][x]
 	m := market[y][x]
+	ln := lane[y][x]
+	sec := security[y][x]
+	sp := spotlight[y][x]
 
 	switch {
 	case c > 0.85:
@@ -349,6 +480,12 @@ func symbol(x, y int) string {
 		return "◆"
 	case pw > 1.5:
 		return "⚡"
+	case sp > 0.8:
+		return "✹"
+	case sec > 0.9:
+		return "▣"
+	case ln > 0.9:
+		return "═"
 	case m > 0.6:
 		return "$"
 	case r > 0.8:
@@ -392,6 +529,13 @@ func render() {
 			grid[y][x] = goblinSymbol(goblins[i].Kind)
 		}
 	}
+	for i := range foxes {
+		x := foxes[i].X
+		y := foxes[i].Y
+		if x >= 0 && x < W && y >= 0 && y < H {
+			grid[y][x] = foxSymbol(foxes[i].Kind)
+		}
+	}
 
 	for y := 0; y < H; y++ {
 		for x := 0; x < W; x++ {
@@ -410,6 +554,7 @@ func main() {
 
 		updateBoids()
 		updateGoblins()
+		updateFoxes()
 		updateFields()
 
 		render()
