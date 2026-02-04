@@ -67,7 +67,7 @@ func TestHandleShankFireEntityHit(t *testing.T) {
 	}
 	player := &testPlayer{pos: system.Vec3{}, eyeHeight: 1.6, world: world}
 
-	HandleShankFire(player, 0, 0, 1)
+	hit, pos, hitEntity := HandleShankFire(player, 0, 0, 1)
 
 	if !entity.hurted {
 		t.Fatalf("expected entity to be hurt")
@@ -77,6 +77,12 @@ func TestHandleShankFireEntityHit(t *testing.T) {
 	}
 	if player.lastSound != "random.orb" {
 		t.Fatalf("expected hit sound, got %s", player.lastSound)
+	}
+	if !hit || !hitEntity {
+		t.Fatalf("expected entity hit result, got hit=%v entity=%v", hit, hitEntity)
+	}
+	if pos != (system.Vec3{X: 1, Y: 2, Z: 3}) {
+		t.Fatalf("expected hit position to match entity hit")
 	}
 	if world.lastEnd.Z < system.MagnumRange-0.01 || world.lastEnd.Z > system.MagnumRange+0.01 {
 		t.Fatalf("expected magnum range end.z near %f, got %f", system.MagnumRange, world.lastEnd.Z)
@@ -90,9 +96,12 @@ func TestHandleShankFireBlockHit(t *testing.T) {
 	}
 	player := &testPlayer{pos: system.Vec3{}, eyeHeight: 1.6, world: world}
 
-	HandleShankFire(player, 0, 0, 0)
+	hit, _, hitEntity := HandleShankFire(player, 0, 0, 0)
 
 	if player.lastSound != "step.wood" {
 		t.Fatalf("expected wood sound, got %s", player.lastSound)
+	}
+	if !hit || hitEntity {
+		t.Fatalf("expected block hit result, got hit=%v entity=%v", hit, hitEntity)
 	}
 }

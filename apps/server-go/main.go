@@ -117,7 +117,10 @@ func main() {
 			cmd := parseUserCmd(buf, netHeaderSize+1)
 			clientStore.Upsert(remote.String(), cmd)
 			if cmd.Buttons&common.BtnAttack != 0 {
-				player.HandleShankFire(p, float64(cmd.Yaw), float64(cmd.Pitch), int(cmd.WeaponIdx))
+				hit, pos, hitEntity := player.HandleShankFire(p, float64(cmd.Yaw), float64(cmd.Pitch), int(cmd.WeaponIdx))
+				if hit {
+					sendImpact(conn, remote, pos, hitEntity, 0)
+				}
 			}
 			_ = remote
 		}
@@ -170,6 +173,19 @@ func sendVoxelPacket(conn *net.UDPConn, remote *net.UDPAddr, info clientInfo) cl
 	_, _ = conn.WriteToUDP(payload, remote)
 	info.lastVoxelSent = now
 	return info
+}
+
+func sendImpact(conn *net.UDPConn, remote *net.UDPAddr, pos system.Vec3, hitEntity bool, blockID uint16) {
+	payload := make([]byte, 20)
+	payload[0] = common.PacketImpact
+	if hitEntity {
+		payload[1] = 1
+	}
+	binary.LittleEndian.PutUint32(payload[4:], math.Float32bits(float32(pos.X)))
+	binary.LittleEndian.PutUint32(payload[8:], math.Float32bits(float32(pos.Y)))
+	binary.LittleEndian.PutUint32(payload[12:], math.Float32bits(float32(pos.Z)))
+	binary.LittleEndian.PutUint16(payload[16:], blockID)
+	_, _ = conn.WriteToUDP(payload, remote)
 }
 
 func parseUserCmd(data []byte, offset int) common.UserCmd {

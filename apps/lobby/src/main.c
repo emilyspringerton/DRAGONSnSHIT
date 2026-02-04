@@ -57,6 +57,8 @@ typedef struct {
 
 static VoxelPacketBuffer voxel_packet;
 static int voxel_packet_valid = 0;
+static float last_impact_pos[3];
+static int last_impact_type = -1;
 
 void draw_char(char c, float x, float y, float s) {
     glLineWidth(2.0f); glBegin(GL_LINES); // Thicker text for Cyberpunk feel
@@ -614,6 +616,20 @@ void net_process_voxel(char *buffer, int len) {
     voxel_packet_valid = 1;
 }
 
+void net_process_impact(char *buffer, int len) {
+    if (len < (int)sizeof(NetImpactPacket)) return;
+    NetImpactPacket *impact = (NetImpactPacket*)buffer;
+    last_impact_pos[0] = impact->x;
+    last_impact_pos[1] = impact->y;
+    last_impact_pos[2] = impact->z;
+    last_impact_type = impact->impact_type;
+    if (impact->impact_type == 1) {
+        local_state.players[0].hit_feedback = 12;
+    } else {
+        local_state.players[0].hit_feedback = 6;
+    }
+}
+
 void net_tick() {
     char buffer[4096];
     struct sockaddr_in sender;
@@ -630,6 +646,9 @@ void net_tick() {
         }
         if (head->type == PACKET_VOXEL_DATA) {
             net_process_voxel(buffer, len);
+        }
+        if (head->type == PACKET_IMPACT) {
+            net_process_impact(buffer, len);
         }
         len = recvfrom(sock, buffer, 4096, 0, (struct sockaddr*)&sender, &slen);
     }
