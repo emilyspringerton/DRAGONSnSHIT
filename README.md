@@ -194,6 +194,24 @@ We will run DragonsNShit as a fork of Dragonfly and wire the fork into this repo
 - Pin a commit hash or tag from the fork in `go.mod` (remove the local replace).
 - Update the fork when Dragonfly upstream changes are needed; rebase or merge, then retest the bridge layer.
 
+## Monetization: Single-Box Free + Multibox License
+DragonsNShit is free-to-play for single-box players (one human, one character). Population density is the product surface area that creates conflict, economy, and social gravity.
+
+Multiboxing is a first-class, supported feature with an explicit license. The server enforces seat limits and the client UX treats multiboxing as legitimate, not a grey-market exploit.
+
+**Multibox seat pricing per month (Fibonacci ladder + capped tail):**
+1, 1, 2, 3, 5, 8, 13, 21, then **$34 per additional seat**.
+
+**Why this isn’t pay-to-win:**
+- Power is a liability as much as an advantage in an oppressive world.
+- Multibox groups are high-visibility events that attract counter-play.
+- Single-box is complete and free; we charge for scale, not access.
+
+**Business upside:**
+- Free single-box maximizes funnel, retention, and density.
+- Multibox licensing monetizes the minority who seek leverage and status.
+- Pricing escalates quickly to prevent cheap domination, then caps to encourage patron-tier scaling.
+
 🌍 Community Servers = Free R&D
 
 Letting WEAKNIGHT be community-run means:
