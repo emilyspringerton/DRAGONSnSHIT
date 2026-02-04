@@ -20,7 +20,7 @@ func TestStepVehicleAccelerates(t *testing.T) {
 
 func TestStepVehicleBrakes(t *testing.T) {
 	state := VehicleState{Velocity: Vec3{X: 30}}
-	cfg := VehicleConfig{Mass: 900, MaxEngineForce: 11000, MaxBrakeForce: 12000, DragCoefficient: 0.25, RollingResistance: 10, Wheelbase: 3.4}
+	cfg := VehicleConfig{Mass: 900, MaxEngineForce: 11000, MaxBrakeForce: 12000, DragCoefficient: 0.25, RollingResistance: 10, Wheelbase: 3.4, SurfaceGrip: 1}
 	tire := TireGripCurve{PeakSlip: 0.1, PeakGrip: 1.3, SlideGrip: 0.85}
 	aero := AeroModel{BaseDownforce: 800, DownforcePerMS2: 3.0}
 	brakes := BrakeModel{MaxBrakeForce: cfg.MaxBrakeForce, ABSResponse: 1.5}
@@ -36,7 +36,7 @@ func TestStepVehicleBrakes(t *testing.T) {
 
 func TestStepVehicleSteers(t *testing.T) {
 	state := VehicleState{Velocity: Vec3{X: 40}}
-	cfg := VehicleConfig{Mass: 820, MaxEngineForce: 0, MaxBrakeForce: 0, DragCoefficient: 0.2, RollingResistance: 6, Wheelbase: 3.0, Steering: SteeringModel{LowSpeedLimit: 1, HighSpeedLimit: 1, TransitionSpeed: 1}}
+	cfg := VehicleConfig{Mass: 820, MaxEngineForce: 0, MaxBrakeForce: 0, DragCoefficient: 0.2, RollingResistance: 6, Wheelbase: 3.0, Steering: SteeringModel{LowSpeedLimit: 1, HighSpeedLimit: 1, TransitionSpeed: 1}, SurfaceGrip: 1}
 	tire := TireGripCurve{PeakSlip: 0.11, PeakGrip: 1.5, SlideGrip: 1.0}
 	aero := AeroModel{BaseDownforce: 900, DownforcePerMS2: 3.2}
 	brakes := BrakeModel{MaxBrakeForce: cfg.MaxBrakeForce, ABSResponse: 1.2}
@@ -49,7 +49,7 @@ func TestStepVehicleSteers(t *testing.T) {
 
 func TestStepVehicleConservesMomentumWithoutForces(t *testing.T) {
 	state := VehicleState{Velocity: Vec3{X: 20, Z: -5}}
-	cfg := VehicleConfig{Mass: 800, MaxEngineForce: 0, MaxBrakeForce: 0, DragCoefficient: 0, RollingResistance: 0, Wheelbase: 3.1}
+	cfg := VehicleConfig{Mass: 800, MaxEngineForce: 0, MaxBrakeForce: 0, DragCoefficient: 0, RollingResistance: 0, Wheelbase: 3.1, SurfaceGrip: 0}
 	tire := TireGripCurve{PeakSlip: 0.1, PeakGrip: 0, SlideGrip: 0}
 	aero := AeroModel{BaseDownforce: 0, DownforcePerMS2: 0}
 	brakes := BrakeModel{MaxBrakeForce: 0, ABSResponse: 1.0}
@@ -71,5 +71,22 @@ func TestSteeringModelAppliesSpeedLimit(t *testing.T) {
 	}
 	if highSpeed != 0.4 {
 		t.Fatalf("expected high-speed steering to be clamped to 0.4, got %.2f", highSpeed)
+	}
+}
+
+func TestSurfaceGripAffectsLockupRisk(t *testing.T) {
+	state := VehicleState{Velocity: Vec3{X: 25}}
+	cfg := VehicleConfig{Mass: 900, MaxEngineForce: 0, MaxBrakeForce: 12000, DragCoefficient: 0.1, RollingResistance: 5, Wheelbase: 3.4, SurfaceGrip: 1}
+	tire := TireGripCurve{PeakSlip: 0.1, PeakGrip: 1.3, SlideGrip: 0.85}
+	aero := AeroModel{BaseDownforce: 800, DownforcePerMS2: 3.0}
+	brakes := BrakeModel{MaxBrakeForce: cfg.MaxBrakeForce, ABSResponse: 1.5}
+
+	_, highGripTelemetry := StepVehicle(state, VehicleInput{Brake: 1}, cfg, tire, aero, brakes, 0.1)
+
+	cfg.SurfaceGrip = 0.3
+	_, lowGripTelemetry := StepVehicle(state, VehicleInput{Brake: 1}, cfg, tire, aero, brakes, 0.1)
+
+	if lowGripTelemetry.Lockup <= highGripTelemetry.Lockup {
+		t.Fatalf("expected lower grip to raise lockup risk")
 	}
 }

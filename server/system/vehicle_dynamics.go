@@ -22,6 +22,7 @@ type VehicleConfig struct {
 	RollingResistance float64
 	Wheelbase         float64
 	Steering          SteeringModel
+	SurfaceGrip       float64
 }
 
 type SteeringModel struct {
@@ -85,7 +86,11 @@ func StepVehicle(state VehicleState, input VehicleInput, cfg VehicleConfig, tire
 	}
 
 	engineForce := cfg.MaxEngineForce * throttle
-	availableGrip := LateralGripFromSpeed(tire, aero, speed) * cfg.Mass * 9.81
+	gripScale := cfg.SurfaceGrip
+	if gripScale <= 0 {
+		gripScale = 1
+	}
+	availableGrip := LateralGripFromSpeed(tire, aero, speed) * cfg.Mass * 9.81 * gripScale
 	lockupRisk := brakes.LockupRisk(brake, availableGrip)
 	brakeForce := cfg.MaxBrakeForce * brake * (1 - lockupRisk)
 
@@ -102,7 +107,7 @@ func StepVehicle(state VehicleState, input VehicleInput, cfg VehicleConfig, tire
 		longitudinalForce = math.Copysign(math.Min(math.Abs(longitudinalForce), maxLongForce), longitudinalForce)
 	}
 
-	maxLatForce := tire.GripForSlip(slipAngle) * cfg.Mass * 9.81
+	maxLatForce := tire.GripForSlip(slipAngle) * cfg.Mass * 9.81 * gripScale
 	remainingGrip := math.Sqrt(math.Max(availableGrip*availableGrip-longitudinalForce*longitudinalForce, 0))
 	latForce := -math.Copysign(math.Min(math.Abs(maxLatForce), remainingGrip), lateral)
 
