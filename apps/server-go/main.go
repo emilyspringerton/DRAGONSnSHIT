@@ -47,9 +47,15 @@ type voxelBlock struct {
 	blockID uint16
 }
 
+type chunkCoord struct {
+	x int
+	z int
+}
+
 type clientInfo struct {
 	id            uint8
 	lastVoxelSent time.Time
+	chunkIndex    int
 }
 
 func main() {
@@ -139,26 +145,22 @@ func sendWelcome(conn *net.UDPConn, remote *net.UDPAddr, id uint8) {
 
 func sendVoxelPacket(conn *net.UDPConn, remote *net.UDPAddr, info clientInfo) clientInfo {
 	now := time.Now()
-	if now.Sub(info.lastVoxelSent) < time.Second {
+	if now.Sub(info.lastVoxelSent) < 500*time.Millisecond {
 		return info
 	}
-	blocks := []voxelBlock{
-		{x: 10, y: 0, z: 10, blockID: 17},
-		{x: 10, y: 1, z: 10, blockID: 17},
-		{x: 10, y: 2, z: 10, blockID: 17},
-		{x: 9, y: 3, z: 10, blockID: 18},
-		{x: 10, y: 3, z: 10, blockID: 18},
-		{x: 11, y: 3, z: 10, blockID: 18},
-		{x: 10, y: 3, z: 9, blockID: 18},
-		{x: 10, y: 3, z: 11, blockID: 18},
+	chunks := nearbyChunks(0, 0, 1)
+	if len(chunks) == 0 {
+		return info
 	}
+	chunk := chunks[info.chunkIndex%len(chunks)]
+	blocks := scanChunkForVoxelBlocks(chunk.x, chunk.z)
 
 	headerSize := 16
 	blockSize := 6
 	payload := make([]byte, headerSize+len(blocks)*blockSize)
 	payload[0] = common.PacketVoxelData
-	binary.LittleEndian.PutUint32(payload[4:], 0)
-	binary.LittleEndian.PutUint32(payload[8:], 0)
+	binary.LittleEndian.PutUint32(payload[4:], uint32(chunk.x))
+	binary.LittleEndian.PutUint32(payload[8:], uint32(chunk.z))
 	binary.LittleEndian.PutUint16(payload[12:], uint16(len(blocks)))
 
 	offset := headerSize
@@ -172,6 +174,7 @@ func sendVoxelPacket(conn *net.UDPConn, remote *net.UDPAddr, info clientInfo) cl
 	}
 	_, _ = conn.WriteToUDP(payload, remote)
 	info.lastVoxelSent = now
+	info.chunkIndex++
 	return info
 }
 
@@ -209,4 +212,100 @@ func parseUserCmd(data []byte, offset int) common.UserCmd {
 	off += 4
 	cmd.WeaponIdx = int32(binary.LittleEndian.Uint32(data[off:]))
 	return cmd
+}
+
+const (
+	chunkSize   = 16
+	chunkHeight = 16
+	logBlockID  = 17
+	leafBlockID = 18
+)
+
+func nearbyChunks(centerX, centerZ, radius int) []chunkCoord {
+	if radius < 0 {
+		return nil
+	}
+	chunks := make([]chunkCoord, 0, (radius*2+1)*(radius*2+1))
+	for dz := -radius; dz <= radius; dz++ {
+		for dx := -radius; dx <= radius; dx++ {
+			chunks = append(chunks, chunkCoord{x: centerX + dx, z: centerZ + dz})
+		}
+	}
+	return chunks
+}
+
+func scanChunkForVoxelBlocks(chunkX, chunkZ int) []voxelBlock {
+	blocks := make([]uint16, chunkSize*chunkHeight*chunkSize)
+	for _, tree := range treeSeedsForChunk(chunkX, chunkZ) {
+		placeTree(blocks, tree.x, tree.z, tree.baseY)
+	}
+
+	results := make([]voxelBlock, 0, 64)
+	for y := 0; y < chunkHeight; y++ {
+		for z := 0; z < chunkSize; z++ {
+			for x := 0; x < chunkSize; x++ {
+				blockID := blocks[chunkIndex(x, y, z)]
+				if blockID != logBlockID && blockID != leafBlockID {
+					continue
+				}
+				results = append(results, voxelBlock{
+					x:       uint8(x),
+					y:       uint8(y),
+					z:       uint8(z),
+					blockID: blockID,
+				})
+			}
+		}
+	}
+	return results
+}
+
+type treeSeed struct {
+	x     int
+	z     int
+	baseY int
+}
+
+func treeSeedsForChunk(chunkX, chunkZ int) []treeSeed {
+	switch {
+	case chunkX == 0 && chunkZ == 0:
+		return []treeSeed{
+			{x: 8, z: 8, baseY: 0},
+			{x: 3, z: 12, baseY: 0},
+		}
+	case chunkX == 1 && chunkZ == 0:
+		return []treeSeed{
+			{x: 6, z: 5, baseY: 0},
+		}
+	case chunkX == -1 && chunkZ == -1:
+		return []treeSeed{
+			{x: 11, z: 4, baseY: 0},
+		}
+	default:
+		return nil
+	}
+}
+
+func placeTree(blocks []uint16, trunkX, trunkZ, baseY int) {
+	for y := 0; y < 4; y++ {
+		setBlock(blocks, trunkX, baseY+y, trunkZ, logBlockID)
+	}
+	leafY := baseY + 4
+	for dz := -1; dz <= 1; dz++ {
+		for dx := -1; dx <= 1; dx++ {
+			setBlock(blocks, trunkX+dx, leafY, trunkZ+dz, leafBlockID)
+		}
+	}
+	setBlock(blocks, trunkX, leafY+1, trunkZ, leafBlockID)
+}
+
+func setBlock(blocks []uint16, x, y, z int, blockID uint16) {
+	if x < 0 || x >= chunkSize || y < 0 || y >= chunkHeight || z < 0 || z >= chunkSize {
+		return
+	}
+	blocks[chunkIndex(x, y, z)] = blockID
+}
+
+func chunkIndex(x, y, z int) int {
+	return (y*chunkSize+z)*chunkSize + x
 }
